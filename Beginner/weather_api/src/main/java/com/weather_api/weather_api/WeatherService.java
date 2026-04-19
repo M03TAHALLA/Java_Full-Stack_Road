@@ -35,7 +35,7 @@ public class WeatherService {
             throw new IllegalArgumentException("City query parameter is required.");
         }
 
-        if (apiKey.isBlank() || "YOUR_VISUAL_CROSSING_API_KEY".equals(apiKey)) {
+        if (apiKey.isBlank()) {
             throw new IllegalStateException("Set weather.api.key in application.properties before calling /weather.");
         }
 
