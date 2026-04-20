@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Article</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Edit Article</h1>
+    </header>
+
+    <main>
+        <p th:if="${error}" class="error" th:text="${error}">Validation error</p>
+
+        <form th:action="@{'/admin/articles/' + ${article.slug} + '/edit'}" method="post" class="form">
+            <label for="title">Title</label>
+            <input id="title" name="title" type="text" th:value="${article.title}" required>
+
+            <label for="content">Content</label>
+            <textarea id="content" name="content" rows="12" th:text="${article.content}"></textarea>
+
+            <div class="form-actions">
+                <button class="button" type="submit">Update</button>
+                <a th:href="@{/admin/dashboard}">Cancel</a>
+            </div>
+        </form>
+    </main>
+</div>
+</body>
+</html>

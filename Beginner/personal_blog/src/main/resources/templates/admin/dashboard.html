@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Admin Dashboard</h1>
+        <p>
+            <a class="button" th:href="@{/admin/articles/new}">Add New Article</a>
+        </p>
+    </header>
+
+    <main>
+        <p th:if="${#lists.isEmpty(articles)}">No articles yet.</p>
+
+        <table th:if="${!#lists.isEmpty(articles)}" class="table">
+            <thead>
+            <tr>
+                <th>Title</th>
+                <th>Date</th>
+                <th>Edit</th>
+                <th>Delete</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="article : ${articles}">
+                <td th:text="${article.title}">Article title</td>
+                <td th:text="${#temporals.format(article.publishedAt, 'yyyy-MM-dd HH:mm')}">2026-04-20 12:00</td>
+                <td>
+                    <a class="button" th:href="@{'/admin/articles/' + ${article.slug} + '/edit'}">Edit</a>
+                </td>
+                <td>
+                    <form th:action="@{'/admin/articles/' + ${article.slug} + '/delete'}" method="post">
+                        <button class="button danger" type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <p>
+            <a th:href="@{/}">View Public Home</a>
+        </p>
+    </main>
+</div>
+</body>
+</html>

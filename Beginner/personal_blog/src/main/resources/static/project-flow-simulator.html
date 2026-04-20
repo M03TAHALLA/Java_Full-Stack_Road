@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spring Boot Blog — Live Request Flow Simulation</title>
+<style>
+/* ===== RESET & BASE ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#0d1117;
+  --bg-secondary:#161b22;
+  --bg-tertiary:#1c2333;
+  --bg-card:#21262d;
+  --border:#30363d;
+  --border-highlight:#58a6ff;
+  --text-primary:#e6edf3;
+  --text-secondary:#8b949e;
+  --text-muted:#484f58;
+  --accent-blue:#58a6ff;
+  --accent-green:#3fb950;
+  --accent-orange:#d29922;
+  --accent-red:#f85149;
+  --accent-purple:#bc8cff;
+  --accent-cyan:#39d2c0;
+  --accent-pink:#f778ba;
+  --node-idle:#21262d;
+  --node-active:#1f3a5f;
+  --node-done:#1a3329;
+  --node-error:#3d1a1a;
+  --node-active-border:#58a6ff;
+  --node-done-border:#3fb950;
+  --node-error-border:#f85149;
+  --glow-blue:0 0 20px rgba(88,166,255,0.3);
+  --glow-green:0 0 20px rgba(63,185,80,0.3);
+  --glow-red:0 0 20px rgba(248,81,73,0.3);
+  --radius:8px;
+  --radius-lg:12px;
+  --transition:0.3s ease;
+  --font-mono:'SF Mono','Cascadia Code','Fira Code','Consolas',monospace;
+  --font-sans:-apple-system,'Segoe UI','Helvetica Neue',Arial,sans-serif;
+}
+html{font-size:14px;scroll-behavior:smooth}
+body{
+  font-family:var(--font-sans);
+  background:var(--bg-primary);
+  color:var(--text-primary);
+  line-height:1.6;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg-secondary)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+
+/* ===== HEADER ===== */
+.header{
+  background:var(--bg-secondary);
+  border-bottom:1px solid var(--border);
+  padding:12px 24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:12px;
+  position:sticky;
+  top:0;
+  z-index:100;
+}
+.header-left{display:flex;align-items:center;gap:12px}
+.header-logo{
+  width:32px;height:32px;
+  background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:16px;color:#fff;
+}
+.header-title{font-size:16px;font-weight:600;color:var(--text-primary)}
+.header-subtitle{font-size:11px;color:var(--text-secondary);margin-top:-2px}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kbd{
+  display:inline-flex;align-items:center;justify-content:center;
+  background:var(--bg-tertiary);border:1px solid var(--border);
+  border-radius:4px;padding:2px 6px;font-size:10px;
+  font-family:var(--font-mono);color:var(--text-secondary);
+  min-width:22px;
+}
+.header-shortcuts{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted)}
+.header-shortcuts span{display:flex;align-items:center;gap:3px}
+
+/* ===== LAYOUT ===== */
+.app-layout{
+  display:grid;
+  grid-template-columns:280px 1fr 320px;
+  grid-template-rows:auto 1fr;
+  gap:0;
+  height:calc(100vh - 57px);
+}
+/* ===== LEFT SIDEBAR ===== */
+.sidebar-left{
+  background:var(--bg-secondary);
+  border-right:1px solid var(--border);
+  overflow-y:auto;
+  display:flex;flex-direction:column;
+}
+.sidebar-section{padding:16px;border-bottom:1px solid var(--border)}
+.sidebar-section:last-child{border-bottom:none;flex:1;display:flex;flex-direction:column}
+.sidebar-label{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:1.2px;color:var(--text-muted);margin-bottom:10px;
+}
+/* Scenario selector */
+.scenario-list{display:flex;flex-direction:column;gap:4px}
+.scenario-btn{
+  background:transparent;border:1px solid transparent;
+  border-radius:var(--radius);padding:8px 10px;
+  text-align:left;cursor:pointer;transition:var(--transition);
+  color:var(--text-secondary);font-size:12px;font-family:var(--font-sans);
+  display:flex;align-items:flex-start;gap:8px;
+}
+.scenario-btn:hover{background:var(--bg-tertiary);color:var(--text-primary)}
+.scenario-btn.active{
+  background:var(--node-active);
+  border-color:var(--accent-blue);
+  color:var(--text-primary);
+}
+.scenario-method{
+  font-family:var(--font-mono);font-size:10px;font-weight:600;
+  padding:2px 5px;border-radius:3px;white-space:nowrap;flex-shrink:0;
+  margin-top:1px;
+}
+.method-get{background:#1a3329;color:var(--accent-green)}
+.method-post{background:#3a2a1a;color:var(--accent-orange)}
+.method-boot{background:#2a1a3a;color:var(--accent-purple)}
+.scenario-route{font-family:var(--font-mono);font-size:11px}
+.scenario-desc{font-size:10px;color:var(--text-muted);margin-top:2px}
+
+/* Controls */
+.controls-row{display:flex;gap:6px;flex-wrap:wrap}
+.ctrl-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  background:var(--bg-tertiary);border:1px solid var(--border);
+  border-radius:var(--radius);padding:6px 12px;
+  font-size:12px;font-family:var(--font-sans);font-weight:500;
+  color:var(--text-primary);cursor:pointer;transition:var(--transition);
+  white-space:nowrap;
+}
+.ctrl-btn:hover{border-color:var(--accent-blue);background:var(--node-active)}
+.ctrl-btn.primary{background:var(--accent-blue);border-color:var(--accent-blue);color:#fff}
+.ctrl-btn.primary:hover{background:#4393e6}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed}
+.ctrl-btn .icon{font-size:14px}
+.speed-control{margin-top:10px}
+.speed-control label{font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:8px}
+.speed-slider{
+  flex:1;-webkit-appearance:none;appearance:none;
+  height:4px;background:var(--border);border-radius:2px;outline:none;
+}
+.speed-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;border-radius:50%;
+  background:var(--accent-blue);cursor:pointer;
+  border:2px solid var(--bg-secondary);
+}
+.speed-value{
+  font-family:var(--font-mono);font-size:11px;
+  color:var(--accent-blue);min-width:32px;text-align:right;
+}
+
+/* ===== MAIN CONTENT ===== */
+.main-content{
+  overflow-y:auto;padding:24px;
+  display:flex;flex-direction:column;gap:24px;
+}
+/* Pipeline */
+.pipeline-container{
+  background:var(--bg-secondary);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:24px;
+  position:relative;
+}
+.pipeline-title{
+  font-size:12px;font-weight:600;color:var(--text-secondary);
+  margin-bottom:16px;text-transform:uppercase;letter-spacing:1px;
+  display:flex;align-items:center;gap:8px;
+}
+.pipeline-title .dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--accent-green);
+  animation:pulse-dot 2s infinite;
+}
+@keyframes pulse-dot{
+  0%,100%{opacity:1}50%{opacity:0.3}
+}
+.pipeline-nodes{
+  display:flex;
+  align-items:stretch;
+  gap:0;
+  overflow-x:auto;
+  padding-bottom:8px;
+}
+.pipeline-edge{
+  display:flex;align-items:center;
+  min-width:32px;flex-shrink:0;
+  position:relative;
+}
+.pipeline-edge .edge-line{
+  width:100%;height:2px;
+  background:var(--border);
+  position:relative;
+  transition:background var(--transition);
+}
+.pipeline-edge.active .edge-line{background:var(--accent-blue)}
+.pipeline-edge.done .edge-line{background:var(--accent-green)}
+.pipeline-edge.error .edge-line{background:var(--accent-red)}
+.pipeline-edge .edge-arrow{
+  position:absolute;right:-4px;top:50%;transform:translateY(-50%);
+  width:0;height:0;
+  border-top:5px solid transparent;
+  border-bottom:5px solid transparent;
+  border-left:6px solid var(--border);
+  transition:border-color var(--transition);
+}
+.pipeline-edge.active .edge-arrow{border-left-color:var(--accent-blue)}
+.pipeline-edge.done .edge-arrow{border-left-color:var(--accent-green)}
+.pipeline-edge.error .edge-arrow{border-left-color:var(--accent-red)}
+
+.pipeline-node{
+  background:var(--node-idle);
+  border:2px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:16px 14px;
+  min-width:120px;
+  max-width:150px;
+  flex-shrink:0;
+  text-align:center;
+  transition:all 0.4s ease;
+  position:relative;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+}
+.pipeline-node.active{
+  background:var(--node-active);
+  border-color:var(--node-active-border);
+  box-shadow:var(--glow-blue);
+  transform:translateY(-3px);
+}
+.pipeline-node.done{
+  background:var(--node-done);
+  border-color:var(--node-done-border);
+  box-shadow:var(--glow-green);
+}
+.pipeline-node.error{
+  background:var(--node-error);
+  border-color:var(--node-error-border);
+  box-shadow:var(--glow-red);
+}
+.pipeline-node .node-icon{font-size:24px;line-height:1}
+.pipeline-node .node-label{
+  font-size:11px;font-weight:600;color:var(--text-primary);
+  line-height:1.3;
+}
+.pipeline-node .node-sub{
+  font-size:9px;color:var(--text-muted);
+  font-family:var(--font-mono);
+  word-break:break-all;
+  max-height:40px;overflow:hidden;
+  transition:color var(--transition);
+}
+.pipeline-node.active .node-sub{color:var(--text-secondary)}
+.pipeline-node .node-status{
+  position:absolute;top:8px;right:8px;
+  width:8px;height:8px;border-radius:50%;
+  background:var(--text-muted);
+  transition:background var(--transition);
+}
+.pipeline-node.active .node-status{background:var(--accent-blue);animation:pulse-dot 1s infinite}
+.pipeline-node.done .node-status{background:var(--accent-green)}
+.pipeline-node.error .node-status{background:var(--accent-red)}
+
+/* Step Detail Card */
+.step-detail-card{
+  background:var(--bg-secondary);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:20px;
+  min-height:100px;
+}
+.step-detail-header{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;
+}
+.step-detail-title{font-size:14px;font-weight:600}
+.step-counter{
+  font-family:var(--font-mono);font-size:11px;
+  color:var(--accent-blue);
+  background:var(--node-active);
+  padding:3px 8px;border-radius:4px;
+}
+.step-detail-body{
+  font-size:13px;color:var(--text-secondary);line-height:1.7;
+}
+.step-detail-body code{
+  font-family:var(--font-mono);
+  background:var(--bg-tertiary);
+  padding:1px 5px;border-radius:3px;
+  color:var(--accent-cyan);font-size:12px;
+}
+.step-detail-body .call-chain{
+  margin-top:10px;padding:10px;
+  background:var(--bg-primary);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  font-family:var(--font-mono);
+  font-size:11px;line-height:1.8;
+  color:var(--text-secondary);
+  overflow-x:auto;
+}
+.step-detail-body .call-chain .highlight{color:var(--accent-blue);font-weight:600}
+.step-detail-body .call-chain .cls{color:var(--accent-purple)}
+.step-detail-body .call-chain .mth{color:var(--accent-green)}
+.step-detail-body .call-chain .arg{color:var(--accent-orange)}
+.step-detail-body .call-chain .ret{color:var(--accent-cyan)}
+.step-detail-body .call-chain .file{color:var(--accent-pink)}
+
+/* Timeline */
+.timeline-container{
+  background:var(--bg-secondary);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:20px;
+}
+.timeline-container .sidebar-label{margin-bottom:12px}
+.timeline-steps{display:flex;flex-direction:column;gap:0}
+.timeline-step{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:8px 0;position:relative;
+}
+.timeline-step::before{
+  content:'';position:absolute;
+  left:11px;top:28px;bottom:-8px;
+  width:2px;background:var(--border);
+}
+.timeline-step:last-child::before{display:none}
+.timeline-dot{
+  width:24px;height:24px;border-radius:50%;
+  background:var(--bg-tertiary);border:2px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;color:var(--text-muted);font-weight:700;
+  flex-shrink:0;transition:all var(--transition);
+  z-index:1;
+}
+.timeline-step.active .timeline-dot{
+  background:var(--node-active);border-color:var(--accent-blue);color:var(--accent-blue);
+}
+.timeline-step.done .timeline-dot{
+  background:var(--node-done);border-color:var(--accent-green);color:var(--accent-green);
+}
+.timeline-step.error .timeline-dot{
+  background:var(--node-error);border-color:var(--accent-red);color:var(--accent-red);
+}
+.timeline-step.active::before{background:var(--accent-blue)}
+.timeline-step.done::before{background:var(--accent-green)}
+.timeline-info{flex:1;min-width:0}
+.timeline-info .tl-title{
+  font-size:12px;font-weight:500;color:var(--text-secondary);
+  transition:color var(--transition);
+}
+.timeline-step.active .tl-title,.timeline-step.done .tl-title{color:var(--text-primary)}
+.timeline-info .tl-detail{
+  font-size:10px;color:var(--text-muted);font-family:var(--font-mono);
+  margin-top:2px;
+}
+
+/* ===== RIGHT SIDEBAR (Event Log) ===== */
+.sidebar-right{
+  background:var(--bg-secondary);
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.log-header{
+  padding:16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.log-header .sidebar-label{margin-bottom:0}
+.log-clear{
+  background:transparent;border:1px solid var(--border);
+  border-radius:4px;padding:3px 8px;font-size:10px;
+  color:var(--text-muted);cursor:pointer;font-family:var(--font-sans);
+  transition:var(--transition);
+}
+.log-clear:hover{color:var(--text-primary);border-color:var(--accent-red)}
+.log-body{
+  flex:1;overflow-y:auto;padding:8px 12px;
+  display:flex;flex-direction:column;gap:2px;
+}
+.log-entry{
+  font-family:var(--font-mono);font-size:10px;
+  line-height:1.6;color:var(--text-secondary);
+  padding:3px 6px;border-radius:3px;
+  transition:background var(--transition);
+  animation:fadeIn 0.3s ease;
+}
+.log-entry:hover{background:var(--bg-tertiary)}
+.log-entry .log-time{color:var(--text-muted);margin-right:6px}
+.log-entry .log-level-info{color:var(--accent-blue)}
+.log-entry .log-level-ok{color:var(--accent-green)}
+.log-entry .log-level-warn{color:var(--accent-orange)}
+.log-entry .log-level-err{color:var(--accent-red)}
+.log-entry .log-level-debug{color:var(--accent-purple)}
+.log-entry .log-msg{color:var(--text-primary)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:1200px){
+  .app-layout{grid-template-columns:240px 1fr 260px}
+}
+@media(max-width:960px){
+  .app-layout{
+    grid-template-columns:1fr;
+    grid-template-rows:auto auto auto;
+    height:auto;
+  }
+  .sidebar-left{
+    border-right:none;border-bottom:1px solid var(--border);
+    max-height:40vh;overflow-y:auto;
+  }
+  .sidebar-right{
+    border-left:none;border-top:1px solid var(--border);
+    max-height:40vh;
+  }
+  .pipeline-nodes{flex-wrap:wrap;gap:8px;justify-content:center}
+  .pipeline-edge{min-width:20px}
+  .header-shortcuts{display:none}
+}
+@media(max-width:600px){
+  .header{padding:10px 12px}
+  .main-content{padding:12px}
+  .pipeline-node{min-width:90px;max-width:110px;padding:10px 8px}
+  .pipeline-node .node-icon{font-size:18px}
+  .controls-row{justify-content:center}
+}
+
+/* ===== PROGRESS BAR ===== */
+.progress-bar-container{
+  padding:0 16px 12px 16px;
+}
+.progress-bar-track{
+  width:100%;height:4px;background:var(--border);
+  border-radius:2px;overflow:hidden;
+}
+.progress-bar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,var(--accent-blue),var(--accent-green));
+  border-radius:2px;
+  transition:width 0.4s ease;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo">⚡</div>
+    <div>
+      <div class="header-title">Spring Boot Blog — Request Flow Simulator</div>
+      <div class="header-subtitle">PersonalBlogApplication · Spring Boot 3.x · Java 17+ · Thymeleaf MVC</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-shortcuts">
+      <span><kbd class="kbd">Space</kbd> Play/Pause</span>
+      <span><kbd class="kbd">N</kbd> Next</span>
+      <span><kbd class="kbd">R</kbd> Reset</span>
+    </div>
+  </div>
+</header>
+
+<!-- ===== APP LAYOUT ===== -->
+<div class="app-layout">
+
+  <!-- LEFT SIDEBAR -->
+  <aside class="sidebar-left">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Scenarios</div>
+      <div class="scenario-list" id="scenarioList"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Controls</div>
+      <div class="controls-row">
+        <button class="ctrl-btn primary" id="btnPlay" title="Play/Pause (Space)"><span class="icon">▶</span> Play</button>
+        <button class="ctrl-btn" id="btnNext" title="Next Step (N)"><span class="icon">⏭</span> Next</button>
+        <button class="ctrl-btn" id="btnReset" title="Reset (R)"><span class="icon">↺</span> Reset</button>
+      </div>
+      <div class="speed-control">
+        <label>
+          Speed
+          <input type="range" class="speed-slider" id="speedSlider" min="1" max="10" value="5">
+          <span class="speed-value" id="speedValue">1.0×</span>
+        </label>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Step Timeline</div>
+      <div id="timelinePanel" class="timeline-steps"></div>
+    </div>
+    <div class="progress-bar-container">
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="progressBar"></div></div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+    <!-- Pipeline -->
+    <div class="pipeline-container">
+      <div class="pipeline-title"><span class="dot"></span> Execution Pipeline</div>
+      <div class="pipeline-nodes" id="pipelineNodes"></div>
+    </div>
+    <!-- Step Detail -->
+    <div class="step-detail-card" id="stepDetailCard">
+      <div class="step-detail-header">
+        <div class="step-detail-title" id="stepDetailTitle">Select a scenario to begin</div>
+        <div class="step-counter" id="stepCounter">—</div>
+      </div>
+      <div class="step-detail-body" id="stepDetailBody">
+        <p>Choose a scenario from the left panel and press <strong>Play</strong> or <strong>Next Step</strong> to walk through the Spring Boot execution pipeline.</p>
+      </div>
+    </div>
+    <!-- Timeline (mobile fallback — hidden on desktop, shown via CSS if needed) -->
+  </main>
+
+  <!-- RIGHT SIDEBAR — EVENT LOG -->
+  <aside class="sidebar-right">
+    <div class="log-header">
+      <div class="sidebar-label">Event Log</div>
+      <button class="log-clear" id="btnClearLog">Clear</button>
+    </div>
+    <div class="log-body" id="logBody"></div>
+  </aside>
+
+</div>
+
+<script>
+/* ====================================================================
+   DATA: SCENARIOS
+   ==================================================================== */
+const NODES_HTTP = [
+  { id:'browser',    icon:'🌐', label:'Browser',             sub:'' },
+  { id:'security',   icon:'🛡️', label:'Security FilterChain',sub:'SecurityConfig' },
+  { id:'dispatcher', icon:'📡', label:'DispatcherServlet',   sub:'HandlerMapping' },
+  { id:'controller', icon:'🎮', label:'Controller',          sub:'' },
+  { id:'service',    icon:'⚙️', label:'ArticleService',      sub:'Service Layer' },
+  { id:'filesystem', icon:'💾', label:'File System',          sub:'data/articles/*.json' },
+  { id:'thymeleaf',  icon:'🖼️', label:'Thymeleaf View',      sub:'Template Engine' },
+  { id:'response',   icon:'📨', label:'HTTP Response',        sub:'' },
+];
+
+const NODES_STARTUP = [
+  { id:'main',        icon:'☕', label:'main()',              sub:'PersonalBlogApplication' },
+  { id:'springrun',   icon:'🚀', label:'SpringApplication.run', sub:'Bootstrap' },
+  { id:'context',     icon:'📦', label:'ApplicationContext', sub:'Component Scan' },
+  { id:'beans',       icon:'🫘', label:'Bean Instantiation', sub:'DI Wiring' },
+  { id:'postconstruct', icon:'🔧', label:'@PostConstruct',  sub:'ArticleService init' },
+  { id:'securityinit', icon:'🛡️', label:'Security Setup',   sub:'SecurityConfig' },
+  { id:'tomcat',      icon:'🐱', label:'Embedded Tomcat',   sub:'Port 8080' },
+  { id:'ready',       icon:'✅', label:'Application Ready', sub:'Accepting requests' },
+];
+
+const SCENARIOS = [
+  /* 0 — Startup */
+  {
+    id:'startup', method:'BOOT', route:'Startup Pipeline', desc:'Application bootstrap sequence',
+    nodes: NODES_STARTUP,
+    steps:[
+      { nodeId:'main', title:'JVM invokes main()',
+        detail:'The JVM calls <code>PersonalBlogApplication.main(String[] args)</code>. This is the entry point of the application.',
+        callChain:'<span class="cls">PersonalBlogApplication</span>.<span class="mth">main</span>(<span class="arg">args</span>)',
+        log:['INFO','main()','PersonalBlogApplication.main() invoked'] },
+      { nodeId:'springrun', title:'SpringApplication.run() called',
+        detail:'<code>SpringApplication.run(PersonalBlogApplication.class, args)</code> bootstraps Spring Boot: loads properties, creates the ApplicationContext, triggers auto-configuration.',
+        callChain:'<span class="cls">SpringApplication</span>.<span class="mth">run</span>(<span class="arg">PersonalBlogApplication.class, args</span>)',
+        log:['INFO','SpringApp','SpringApplication.run() → bootstrapping context'] },
+      { nodeId:'context', title:'ApplicationContext created',
+        detail:'Spring creates an <code>AnnotationConfigServletWebServerApplicationContext</code>. Component scanning discovers <code>@Configuration</code>, <code>@Service</code>, <code>@Controller</code> classes in the base package.',
+        callChain:'Component scan → finds:\n  <span class="cls">SecurityConfig</span> <span class="mth">@Configuration</span>\n  <span class="cls">ArticleService</span> <span class="mth">@Service</span>\n  <span class="cls">PublicController</span> <span class="mth">@Controller</span>\n  <span class="cls">AdminController</span> <span class="mth">@Controller</span>',
+        log:['OK','Context','ApplicationContext initialized, 4 components found'] },
+      { nodeId:'beans', title:'Bean instantiation & dependency injection',
+        detail:'Spring instantiates all beans and wires dependencies. <code>ArticleService</code> is injected into both controllers. <code>SecurityConfig</code> creates <code>SecurityFilterChain</code>, <code>UserDetailsService</code> (in-memory admin from properties), and <code>BCryptPasswordEncoder</code> beans.',
+        callChain:'<span class="cls">SecurityConfig</span> → <span class="mth">securityFilterChain()</span>\n<span class="cls">SecurityConfig</span> → <span class="mth">userDetailsService()</span> → admin user from <span class="arg">blog.admin.username</span> / <span class="arg">blog.admin.password</span>\n<span class="cls">SecurityConfig</span> → <span class="mth">passwordEncoder()</span> → <span class="ret">BCryptPasswordEncoder</span>\n<span class="cls">ArticleService</span>(<span class="arg">blog.data.path</span>) injected into controllers',
+        log:['INFO','Beans','All beans instantiated and wired'] },
+      { nodeId:'postconstruct', title:'ArticleService @PostConstruct',
+        detail:'<code>ArticleService</code> reads <code>blog.data.path = data/articles</code> from application properties. It creates the directory <code>data/articles/</code> if it does not exist.',
+        callChain:'<span class="cls">ArticleService</span>.<span class="mth">init()</span>\n  → read property <span class="arg">blog.data.path</span> = <span class="file">data/articles</span>\n  → <span class="mth">Files.createDirectories</span>(<span class="file">data/articles/</span>)',
+        log:['OK','Service','data/articles/ directory ensured'] },
+      { nodeId:'securityinit', title:'Security FilterChain registered',
+        detail:'The <code>SecurityFilterChain</code> bean is registered with these rules:<br>• Permit: <code>/</code>, <code>/article/**</code>, <code>/css/**</code>, <code>/login</code>, <code>/request-flow-visualization.html</code><br>• Authenticate: <code>/admin/**</code><br>• Form login page: <code>/login</code>, success URL: <code>/admin/dashboard</code><br>• Logout: <code>/logout</code> → redirect <code>/</code><br>• CSRF disabled.',
+        callChain:'<span class="cls">SecurityConfig</span>.<span class="mth">securityFilterChain</span>(http)\n  .<span class="mth">authorizeHttpRequests</span>()\n    .requestMatchers(<span class="arg">"/", "/article/**", "/css/**", "/login"</span>).permitAll()\n    .requestMatchers(<span class="arg">"/admin/**"</span>).authenticated()\n  .<span class="mth">formLogin</span>(login → login.loginPage(<span class="arg">"/login"</span>).defaultSuccessUrl(<span class="arg">"/admin/dashboard"</span>))\n  .<span class="mth">logout</span>(logout → logout.logoutSuccessUrl(<span class="arg">"/"</span>))\n  .<span class="mth">csrf</span>(csrf → csrf.disable())',
+        log:['OK','Security','FilterChain configured: public + /admin/** protected'] },
+      { nodeId:'tomcat', title:'Embedded Tomcat starts',
+        detail:'Spring Boot starts the embedded Tomcat server on the configured port (default 8080). The <code>DispatcherServlet</code> is registered and mapped to <code>/</code>. The Security <code>FilterChain</code> is installed as a servlet filter.',
+        callChain:'<span class="cls">TomcatWebServer</span>.<span class="mth">start</span>()\n  → DispatcherServlet mapped to <span class="arg">/</span>\n  → SecurityFilterChain installed',
+        log:['INFO','Tomcat','Tomcat started on port 8080'] },
+      { nodeId:'ready', title:'Application Ready',
+        detail:'The application context is fully refreshed. <code>PersonalBlogApplication</code> is ready to accept HTTP requests. The startup banner and timing info appear in the console.',
+        callChain:'<span class="highlight">Started PersonalBlogApplication in X.XXX seconds</span>',
+        log:['OK','Ready','✅ PersonalBlogApplication started successfully'] },
+    ]
+  },
+  /* 1 — GET / */
+  {
+    id:'get-home', method:'GET', route:'/', desc:'Public home page — list all articles',
+    nodes: NODES_HTTP,
+    steps:[
+      { nodeId:'browser', title:'Browser sends GET /',
+        detail:'The browser issues an HTTP <code>GET</code> request to <code>/</code>.',
+        callChain:'<span class="highlight">GET / HTTP/1.1</span>\nHost: localhost:8080',
+        log:['INFO','Browser','GET / initiated'] },
+      { nodeId:'security', title:'SecurityFilterChain evaluates request',
+        detail:'The request passes through <code>SecurityFilterChain</code>. Route <code>/</code> matches <code>permitAll()</code> — no authentication required. Request proceeds.',
+        callChain:'<span class="cls">SecurityFilterChain</span>.<span class="mth">doFilter</span>()\n  → requestMatchers(<span class="arg">"/"</span>).permitAll() → <span class="ret">PASS</span>',
+        log:['OK','Security','/ is public — request permitted'] },
+      { nodeId:'dispatcher', title:'DispatcherServlet routes request',
+        detail:'<code>DispatcherServlet</code> consults its <code>HandlerMapping</code> and resolves <code>GET /</code> to <code>PublicController.showHomePage()</code>.',
+        callChain:'<span class="cls">DispatcherServlet</span>.<span class="mth">doDispatch</span>()\n  → <span class="cls">RequestMappingHandlerMapping</span>\n  → matched: <span class="cls">PublicController</span>.<span class="mth">showHomePage</span>()',
+        log:['INFO','Dispatcher','Mapped to PublicController.showHomePage()'] },
+      { nodeId:'controller', title:'PublicController.showHomePage() executes',
+        detail:'The controller method calls <code>articleService.getAllArticles()</code> and adds the result to the Model for Thymeleaf.',
+        callChain:'<span class="cls">PublicController</span>.<span class="mth">showHomePage</span>(Model model)\n  → List&lt;Article&gt; articles = <span class="cls">articleService</span>.<span class="mth">getAllArticles</span>()\n  → model.addAttribute(<span class="arg">"articles"</span>, articles)\n  → return <span class="ret">"public/home"</span>',
+        log:['INFO','Controller','PublicController.showHomePage() called'] },
+      { nodeId:'service', title:'ArticleService.getAllArticles()',
+        detail:'Reads all <code>.json</code> files in <code>data/articles/</code>, deserializes each into an <code>Article</code> object using Jackson <code>ObjectMapper</code>, and sorts by <code>publishedAt</code> descending (newest first).',
+        callChain:'<span class="cls">ArticleService</span>.<span class="mth">getAllArticles</span>()\n  → <span class="mth">Files.list</span>(<span class="file">data/articles/</span>)\n  → filter <span class="arg">*.json</span>\n  → <span class="cls">ObjectMapper</span>.<span class="mth">readValue</span>(file, <span class="arg">Article.class</span>)  × N files\n  → <span class="mth">sort</span> by <span class="arg">publishedAt</span> DESC',
+        log:['OK','Service','Read N article files, sorted by publishedAt DESC'] },
+      { nodeId:'filesystem', title:'File System I/O — read .json files',
+        detail:'Jackson reads each JSON file from <code>data/articles/</code>. Each file contains fields: <code>id</code> (UUID), <code>title</code>, <code>slug</code>, <code>content</code>, <code>publishedAt</code>.',
+        callChain:'<span class="file">data/articles/my-first-post.json</span> → { id, title, slug, content, publishedAt }\n<span class="file">data/articles/another-article.json</span> → { id, title, slug, content, publishedAt }',
+        log:['DEBUG','FileIO','Read data/articles/*.json'] },
+      { nodeId:'thymeleaf', title:'Thymeleaf renders public/home template',
+        detail:'Thymeleaf resolves view name <code>public/home</code> to <code>templates/public/home.html</code>. It processes the template with the model (articles list), producing the final HTML.',
+        callChain:'<span class="cls">ThymeleafViewResolver</span>.<span class="mth">resolveViewName</span>(<span class="arg">"public/home"</span>)\n  → <span class="file">templates/public/home.html</span>\n  → process with model { articles: [...] }\n  → <span class="ret">HTML output</span>',
+        log:['INFO','Thymeleaf','Rendered templates/public/home.html'] },
+      { nodeId:'response', title:'HTTP Response sent to browser',
+        detail:'The rendered HTML is written to the HTTP response with status <code>200 OK</code> and content type <code>text/html</code>. The response flows back through the filter chain to the browser.',
+        callChain:'<span class="highlight">HTTP/1.1 200 OK</span>\nContent-Type: text/html;charset=UTF-8\nBody: [rendered HTML]',
+        log:['OK','Response','200 OK — HTML delivered to browser'] },
+    ]
+  },
+  /* 2 — GET /article/{slug} */
+  {
+    id:'get-article', method:'GET', route:'/article/{slug}', desc:'View a single article by slug',
+    nodes: NODES_HTTP,
+    steps:[
+      { nodeId:'browser', title:'Browser sends GET /article/my-first-post',
+        detail:'The browser requests a specific article page via its slug.',
+        callChain:'<span class="highlight">GET /article/my-first-post HTTP/1.1</span>',
+        log:['INFO','Browser','GET /article/my-first-post'] },
+      { nodeId:'security', title:'SecurityFilterChain — permit /article/**',
+        detail:'Route matches <code>/article/**</code> → <code>permitAll()</code>. No auth required.',
+        callChain:'<span class="cls">SecurityFilterChain</span> → requestMatchers(<span class="arg">"/article/**"</span>).permitAll() → <span class="ret">PASS</span>',
+        log:['OK','Security','/article/** is public — permitted'] },
+      { nodeId:'dispatcher', title:'DispatcherServlet routes to PublicController',
+        detail:'Resolves <code>GET /article/{slug}</code> to <code>PublicController.showArticlePage(slug)</code>. Path variable <code>slug = "my-first-post"</code> is extracted.',
+        callChain:'<span class="cls">DispatcherServlet</span> → <span class="cls">PublicController</span>.<span class="mth">showArticlePage</span>(<span class="arg">@PathVariable slug</span>)\n  slug = <span class="arg">"my-first-post"</span>',
+        log:['INFO','Dispatcher','Mapped to PublicController.showArticlePage(slug)'] },
+      { nodeId:'controller', title:'PublicController.showArticlePage() executes',
+        detail:'Calls <code>articleService.getArticleBySlug("my-first-post")</code>. If null, redirects to <code>/</code>. Otherwise, adds article to model and returns view.',
+        callChain:'<span class="cls">PublicController</span>.<span class="mth">showArticlePage</span>(<span class="arg">"my-first-post"</span>, Model)\n  → Article article = <span class="cls">articleService</span>.<span class="mth">getArticleBySlug</span>(<span class="arg">"my-first-post"</span>)\n  → if (article == null) return <span class="ret">"redirect:/"</span>\n  → model.addAttribute(<span class="arg">"article"</span>, article)\n  → return <span class="ret">"public/article"</span>',
+        log:['INFO','Controller','showArticlePage("my-first-post")'] },
+      { nodeId:'service', title:'ArticleService.getArticleBySlug("my-first-post")',
+        detail:'Reads file <code>data/articles/my-first-post.json</code> and deserializes it to an <code>Article</code> object. Returns <code>null</code> if the file does not exist.',
+        callChain:'<span class="cls">ArticleService</span>.<span class="mth">getArticleBySlug</span>(<span class="arg">"my-first-post"</span>)\n  → read <span class="file">data/articles/my-first-post.json</span>\n  → <span class="cls">ObjectMapper</span>.<span class="mth">readValue</span>(file, <span class="arg">Article.class</span>)\n  → return <span class="ret">Article</span>',
+        log:['OK','Service','Found article: my-first-post'] },
+      { nodeId:'filesystem', title:'File System — read my-first-post.json',
+        detail:'Jackson reads the JSON file and maps it to the Article POJO with fields: id, title, slug, content, publishedAt.',
+        callChain:'<span class="file">data/articles/my-first-post.json</span>\n  → { "id":"uuid", "title":"My First Post", "slug":"my-first-post", "content":"...", "publishedAt":"..." }',
+        log:['DEBUG','FileIO','Read data/articles/my-first-post.json'] },
+      { nodeId:'thymeleaf', title:'Thymeleaf renders public/article template',
+        detail:'View <code>public/article</code> resolved to <code>templates/public/article.html</code>. Template receives the article object and renders title, content, date.',
+        callChain:'<span class="cls">ThymeleafViewResolver</span> → <span class="file">templates/public/article.html</span>\n  → process with model { article: {…} }',
+        log:['INFO','Thymeleaf','Rendered templates/public/article.html'] },
+      { nodeId:'response', title:'HTTP 200 — article page delivered',
+        detail:'Status <code>200 OK</code>, content type <code>text/html</code>.',
+        callChain:'<span class="highlight">HTTP/1.1 200 OK</span>\nContent-Type: text/html;charset=UTF-8',
+        log:['OK','Response','200 OK — article page sent'] },
+    ]
+  },
+  /* 3 — GET /admin/dashboard (unauthenticated) */
+  {
+    id:'get-admin-unauth', method:'GET', route:'/admin/dashboard', desc:'Unauthenticated → redirected to /login',
+    nodes: NODES_HTTP,
+    steps:[
+      { nodeId:'browser', title:'Browser sends GET /admin/dashboard',
+        detail:'An unauthenticated user attempts to access the admin dashboard.',
+        callChain:'<span class="highlight">GET /admin/dashboard HTTP/1.1</span>\nCookie: (no JSESSIONID or session expired)',
+        log:['INFO','Browser','GET /admin/dashboard (no session)'] },
+      { nodeId:'security', title:'SecurityFilterChain — authentication required',
+        detail:'Route <code>/admin/**</code> requires authentication. No valid session found. Spring Security intercepts and triggers the login redirect.',
+        callChain:'<span class="cls">SecurityFilterChain</span>.<span class="mth">doFilter</span>()\n  → requestMatchers(<span class="arg">"/admin/**"</span>).authenticated()\n  → No authentication found\n  → <span class="ret">REDIRECT to /login</span>\n  → Saves original URL in session for post-login redirect',
+        log:['WARN','Security','/admin/dashboard requires auth — redirecting to /login'] },
+      { nodeId:'dispatcher', title:'DispatcherServlet handles GET /login',
+        detail:'After redirect, the browser sends <code>GET /login</code>. DispatcherServlet maps it to <code>PublicController.showLoginPage()</code>.',
+        callChain:'<span class="cls">DispatcherServlet</span> → <span class="cls">PublicController</span>.<span class="mth">showLoginPage</span>()',
+        log:['INFO','Dispatcher','Redirect target: PublicController.showLoginPage()'] },
+      { nodeId:'controller', title:'PublicController.showLoginPage() executes',
+        detail:'Returns the login template. No service calls needed.',
+        callChain:'<span class="cls">PublicController</span>.<span class="mth">showLoginPage</span>()\n  → return <span class="ret">"login"</span>',
+        log:['INFO','Controller','showLoginPage() — returning login template'] },
+      { nodeId:'thymeleaf', title:'Thymeleaf renders login template',
+        detail:'View <code>login</code> resolved to <code>templates/login.html</code>. Renders the login form with username/password fields posting to <code>/login</code>.',
+        callChain:'<span class="cls">ThymeleafViewResolver</span> → <span class="file">templates/login.html</span>\n  → form action=<span class="arg">"/login"</span> method=<span class="arg">"POST"</span>',
+        log:['INFO','Thymeleaf','Rendered templates/login.html'] },
+      { nodeId:'response', title:'HTTP 200 — login page delivered',
+        detail:'The login page is returned with status <code>200 OK</code>. The user sees the login form. After successful login, Spring Security redirects to the originally requested URL (<code>/admin/dashboard</code>).',
+        callChain:'<span class="highlight">HTTP/1.1 200 OK</span>\nContent-Type: text/html\n\n(Assumption: after successful POST /login, Spring Security redirects to /admin/dashboard)',
+        log:['OK','Response','200 OK — login page shown to user'] },
+    ]
+  },
+  /* 4 — POST /admin/articles */
+  {
+    id:'post-create', method:'POST', route:'/admin/articles', desc:'Create a new article',
+    nodes: NODES_HTTP,
+    steps:[
+      { nodeId:'browser', title:'Browser sends POST /admin/articles',
+        detail:'The authenticated admin submits the "Add Article" form with title and content fields.',
+        callChain:'<span class="highlight">POST /admin/articles HTTP/1.1</span>\nContent-Type: application/x-www-form-urlencoded\nCookie: JSESSIONID=xxx\n\ntitle=My+New+Post&content=Hello+World',
+        log:['INFO','Browser','POST /admin/articles — form submitted'] },
+      { nodeId:'security', title:'SecurityFilterChain — authenticated session',
+        detail:'Route <code>/admin/**</code> requires authentication. Valid session with admin role found. Request proceeds. (CSRF disabled.)',
+        callChain:'<span class="cls">SecurityFilterChain</span>.\n  → requestMatchers(<span class="arg">"/admin/**"</span>).authenticated()\n  → Session valid, user: admin\n  → CSRF: disabled\n  → <span class="ret">PASS</span>',
+        log:['OK','Security','Authenticated admin session — permitted'] },
+      { nodeId:'dispatcher', title:'DispatcherServlet routes to AdminController',
+        detail:'Maps <code>POST /admin/articles</code> to <code>AdminController.createArticle()</code>.',
+        callChain:'<span class="cls">DispatcherServlet</span> → <span class="cls">AdminController</span>.<span class="mth">createArticle</span>(<span class="arg">title, content</span>)',
+        log:['INFO','Dispatcher','Mapped to AdminController.createArticle()'] },
+      { nodeId:'controller', title:'AdminController.createArticle() executes',
+        detail:'Validates that title is not blank. Creates a new <code>Article</code> object, sets title and content, then calls <code>articleService.saveArticle(article)</code>. Redirects to <code>/admin/dashboard</code>.',
+        callChain:'<span class="cls">AdminController</span>.<span class="mth">createArticle</span>(<span class="arg">title, content</span>)\n  → validate title not blank\n  → Article article = new Article()\n  → article.setTitle(<span class="arg">"My New Post"</span>)\n  → article.setContent(<span class="arg">"Hello World"</span>)\n  → <span class="cls">articleService</span>.<span class="mth">saveArticle</span>(article)\n  → return <span class="ret">"redirect:/admin/dashboard"</span>',
+        log:['INFO','Controller','createArticle() — title validated, saving'] },
+      { nodeId:'service', title:'ArticleService.saveArticle(article)',
+        detail:'Validates title not blank. Generates UUID <code>id</code> (missing). Generates <code>slug</code> from title using <code>generateSlug()</code>: lowercase → remove accents → remove special chars → spaces to hyphens. Sets <code>publishedAt</code> to now. Writes pretty JSON.',
+        callChain:'<span class="cls">ArticleService</span>.<span class="mth">saveArticle</span>(article)\n  → validate title not blank ✓\n  → id = <span class="mth">UUID.randomUUID()</span>\n  → slug = <span class="mth">generateSlug</span>(<span class="arg">"My New Post"</span>) → <span class="ret">"my-new-post"</span>\n  → publishedAt = <span class="mth">LocalDateTime.now()</span>\n  → <span class="cls">ObjectMapper</span>.<span class="mth">writerWithDefaultPrettyPrinter()</span>.<span class="mth">writeValue</span>(<span class="file">data/articles/my-new-post.json</span>, article)',
+        log:['OK','Service','Article saved: slug=my-new-post'] },
+      { nodeId:'filesystem', title:'File System — write my-new-post.json',
+        detail:'Jackson writes the Article as pretty-printed JSON to <code>data/articles/my-new-post.json</code>.',
+        callChain:'<span class="mth">write</span> → <span class="file">data/articles/my-new-post.json</span>\n{\n  "id": "a1b2c3...",\n  "title": "My New Post",\n  "slug": "my-new-post",\n  "content": "Hello World",\n  "publishedAt": "2024-01-15T10:30:00"\n}',
+        log:['DEBUG','FileIO','Written data/articles/my-new-post.json'] },
+      { nodeId:'response', title:'HTTP 302 — redirect to /admin/dashboard',
+        detail:'Controller returns <code>"redirect:/admin/dashboard"</code>. Spring sends HTTP <code>302 Found</code> with <code>Location: /admin/dashboard</code>. The browser follows the redirect.',
+        callChain:'<span class="highlight">HTTP/1.1 302 Found</span>\nLocation: /admin/dashboard',
+        log:['OK','Response','302 → redirect to /admin/dashboard'] },
+    ]
+  },
+  /* 5 — POST /admin/articles/{slug}/edit */
+  {
+    id:'post-edit', method:'POST', route:'/admin/articles/{slug}/edit', desc:'Update an existing article',
+    nodes: NODES_HTTP,
+    steps:[
+      { nodeId:'browser', title:'Browser sends POST /admin/articles/my-first-post/edit',
+        detail:'Admin submits the edit form with updated title and content.',
+        callChain:'<span class="highlight">POST /admin/articles/my-first-post/edit HTTP/1.1</span>\n\ntitle=My+Updated+Post&content=Updated+content',
+        log:['INFO','Browser','POST /admin/articles/my-first-post/edit'] },
+      { nodeId:'security', title:'SecurityFilterChain — authenticated',
+        detail:'<code>/admin/**</code> → authenticated session found. CSRF disabled. Request passes.',
+        callChain:'<span class="cls">SecurityFilterChain</span> → admin session valid → <span class="ret">PASS</span>',
+        log:['OK','Security','Authenticated — permitted'] },
+      { nodeId:'dispatcher', title:'DispatcherServlet → AdminController.updateArticle()',
+        detail:'Maps to <code>AdminController.updateArticle(slug, title, content)</code> with path variable <code>slug = "my-first-post"</code>.',
+        callChain:'<span class="cls">DispatcherServlet</span> → <span class="cls">AdminController</span>.<span class="mth">updateArticle</span>(<span class="arg">"my-first-post", title, content</span>)',
+        log:['INFO','Dispatcher','Mapped to AdminController.updateArticle()'] },
+      { nodeId:'controller', title:'AdminController.updateArticle() executes',
+        detail:'Loads existing article by slug. Validates new title not blank. Updates title and content. Calls <code>saveArticle()</code>. If the slug changed (because title changed), deletes the old slug file. Redirects to dashboard.',
+        callChain:'<span class="cls">AdminController</span>.<span class="mth">updateArticle</span>(<span class="arg">"my-first-post"</span>, ...)\n  → Article existing = <span class="cls">articleService</span>.<span class="mth">getArticleBySlug</span>(<span class="arg">"my-first-post"</span>)\n  → validate new title ✓\n  → existing.setTitle(<span class="arg">"My Updated Post"</span>)\n  → existing.setContent(<span class="arg">"Updated content"</span>)\n  → <span class="cls">articleService</span>.<span class="mth">saveArticle</span>(existing)\n  → new slug = "my-updated-post" ≠ old slug → <span class="cls">articleService</span>.<span class="mth">deleteArticle</span>(<span class="arg">"my-first-post"</span>)\n  → return <span class="ret">"redirect:/admin/dashboard"</span>',
+        log:['INFO','Controller','updateArticle() — slug changed, will delete old file'] },
+      { nodeId:'service', title:'ArticleService — load, save, delete old',
+        detail:'Three operations: (1) <code>getArticleBySlug("my-first-post")</code> reads existing file. (2) <code>saveArticle()</code> generates new slug from updated title, writes new file. (3) <code>deleteArticle("my-first-post")</code> removes old file.',
+        callChain:'① <span class="cls">ArticleService</span>.<span class="mth">getArticleBySlug</span>(<span class="arg">"my-first-post"</span>) → read <span class="file">my-first-post.json</span>\n② <span class="cls">ArticleService</span>.<span class="mth">saveArticle</span>(article)\n  → slug = <span class="mth">generateSlug</span>(<span class="arg">"My Updated Post"</span>) → <span class="ret">"my-updated-post"</span>\n  → write <span class="file">data/articles/my-updated-post.json</span>\n③ <span class="cls">ArticleService</span>.<span class="mth">deleteArticle</span>(<span class="arg">"my-first-post"</span>)\n  → delete <span class="file">data/articles/my-first-post.json</span>',
+        log:['OK','Service','Saved my-updated-post.json, deleted my-first-post.json'] },
+      { nodeId:'filesystem', title:'File System — write new, delete old',
+        detail:'New file <code>my-updated-post.json</code> is written. Old file <code>my-first-post.json</code> is deleted.',
+        callChain:'<span class="mth">WRITE</span> → <span class="file">data/articles/my-updated-post.json</span>\n<span class="mth">DELETE</span> → <span class="file">data/articles/my-first-post.json</span>',
+        log:['DEBUG','FileIO','Write my-updated-post.json + Delete my-first-post.json'] },
+      { nodeId:'response', title:'HTTP 302 → /admin/dashboard',
+        detail:'Redirect to the admin dashboard after successful update.',
+        callChain:'<span class="highlight">HTTP/1.1 302 Found</span>\nLocation: /admin/dashboard',
+        log:['OK','Response','302 → /admin/dashboard'] },
+    ]
+  },
+  /* 6 — POST /admin/articles/{slug}/delete */
+  {
+    id:'post-delete', method:'POST', route:'/admin/articles/{slug}/delete', desc:'Delete an article',
+    nodes: NODES_HTTP,
+    steps:[
+      { nodeId:'browser', title:'Browser sends POST /admin/articles/my-new-post/delete',
+        detail:'Admin clicks the delete button/form for article with slug "my-new-post".',
+        callChain:'<span class="highlight">POST /admin/articles/my-new-post/delete HTTP/1.1</span>\nCookie: JSESSIONID=xxx',
+        log:['INFO','Browser','POST /admin/articles/my-new-post/delete'] },
+      { nodeId:'security', title:'SecurityFilterChain — authenticated',
+        detail:'<code>/admin/**</code> — valid session. CSRF disabled. Passes.',
+        callChain:'<span class="cls">SecurityFilterChain</span> → admin session → <span class="ret">PASS</span>',
+        log:['OK','Security','Authenticated — permitted'] },
+      { nodeId:'dispatcher', title:'DispatcherServlet → AdminController.deleteArticle()',
+        detail:'Maps to <code>AdminController.deleteArticle(slug)</code>.',
+        callChain:'<span class="cls">DispatcherServlet</span> → <span class="cls">AdminController</span>.<span class="mth">deleteArticle</span>(<span class="arg">"my-new-post"</span>)',
+        log:['INFO','Dispatcher','Mapped to AdminController.deleteArticle()'] },
+      { nodeId:'controller', title:'AdminController.deleteArticle() executes',
+        detail:'Calls <code>articleService.deleteArticle("my-new-post")</code> and redirects to dashboard.',
+        callChain:'<span class="cls">AdminController</span>.<span class="mth">deleteArticle</span>(<span class="arg">"my-new-post"</span>)\n  → <span class="cls">articleService</span>.<span class="mth">deleteArticle</span>(<span class="arg">"my-new-post"</span>)\n  → return <span class="ret">"redirect:/admin/dashboard"</span>',
+        log:['INFO','Controller','deleteArticle("my-new-post")'] },
+      { nodeId:'service', title:'ArticleService.deleteArticle("my-new-post")',
+        detail:'Deletes file <code>data/articles/my-new-post.json</code> if it exists.',
+        callChain:'<span class="cls">ArticleService</span>.<span class="mth">deleteArticle</span>(<span class="arg">"my-new-post"</span>)\n  → <span class="mth">Files.deleteIfExists</span>(<span class="file">data/articles/my-new-post.json</span>)',
+        log:['OK','Service','Deleted my-new-post.json'] },
+      { nodeId:'filesystem', title:'File System — delete my-new-post.json',
+        detail:'The JSON file is removed from disk.',
+        callChain:'<span class="mth">DELETE</span> → <span class="file">data/articles/my-new-post.json</span>  ✓ removed',
+        log:['DEBUG','FileIO','Deleted data/articles/my-new-post.json'] },
+      { nodeId:'response', title:'HTTP 302 → /admin/dashboard',
+        detail:'Redirect response back to the dashboard.',
+        callChain:'<span class="highlight">HTTP/1.1 302 Found</span>\nLocation: /admin/dashboard',
+        log:['OK','Response','302 → /admin/dashboard'] },
+    ]
+  },
+];
+
+/* ====================================================================
+   ENGINE
+   ==================================================================== */
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+let currentScenario = null;
+let currentStep = -1;
+let isPlaying = false;
+let playTimer = null;
+let speed = 1.0; // seconds per step
+
+/* DOM refs */
+const scenarioListEl  = $('#scenarioList');
+const pipelineEl      = $('#pipelineNodes');
+const stepTitleEl     = $('#stepDetailTitle');
+const stepCounterEl   = $('#stepCounter');
+const stepBodyEl      = $('#stepDetailBody');
+const timelineEl      = $('#timelinePanel');
+const logBodyEl       = $('#logBody');
+const progressBarEl   = $('#progressBar');
+const btnPlay         = $('#btnPlay');
+const btnNext         = $('#btnNext');
+const btnReset        = $('#btnReset');
+const speedSlider     = $('#speedSlider');
+const speedValueEl    = $('#speedValue');
+
+/* ---- Build scenario buttons ---- */
+SCENARIOS.forEach((sc, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'scenario-btn';
+  btn.dataset.index = i;
+  const mCls = sc.method === 'GET' ? 'method-get' : sc.method === 'POST' ? 'method-post' : 'method-boot';
+  btn.innerHTML = `
+    <span class="scenario-method ${mCls}">${sc.method}</span>
+    <div>
+      <div class="scenario-route">${sc.route}</div>
+      <div class="scenario-desc">${sc.desc}</div>
+    </div>`;
+  btn.addEventListener('click', () => selectScenario(i));
+  scenarioListEl.appendChild(btn);
+});
+
+/* ---- Select scenario ---- */
+function selectScenario(index) {
+  stopPlaying();
+  currentScenario = SCENARIOS[index];
+  currentStep = -1;
+
+  /* Highlight button */
+  $$('.scenario-btn').forEach((b,i) => b.classList.toggle('active', i === index));
+
+  /* Build pipeline nodes */
+  buildPipeline(currentScenario.nodes);
+
+  /* Build timeline */
+  buildTimeline(currentScenario.steps);
+
+  /* Reset detail */
+  stepTitleEl.textContent = currentScenario.route + ' — Ready';
+  stepCounterEl.textContent = `0 / ${currentScenario.steps.length}`;
+  stepBodyEl.innerHTML = `<p>Press <strong>Play</strong> or <strong>Next Step</strong> to begin the simulation.</p>`;
+  progressBarEl.style.width = '0%';
+
+  addLog('INFO', 'System', `Scenario loaded: ${currentScenario.method} ${currentScenario.route}`);
+}
+
+/* ---- Build pipeline visual ---- */
+function buildPipeline(nodes) {
+  pipelineEl.innerHTML = '';
+  nodes.forEach((node, i) => {
+    const div = document.createElement('div');
+    div.className = 'pipeline-node';
+    div.id = 'pnode-' + node.id;
+    div.innerHTML = `
+      <div class="node-status"></div>
+      <div class="node-icon">${node.icon}</div>
+      <div class="node-label">${node.label}</div>
+      <div class="node-sub">${node.sub}</div>`;
+    pipelineEl.appendChild(div);
+    if (i < nodes.length - 1) {
+      const edge = document.createElement('div');
+      edge.className = 'pipeline-edge';
+      edge.id = 'pedge-' + i;
+      edge.innerHTML = '<div class="edge-line"><div class="edge-arrow"></div></div>';
+      pipelineEl.appendChild(edge);
+    }
+  });
+}
+
+/* ---- Build timeline ---- */
+function buildTimeline(steps) {
+  timelineEl.innerHTML = '';
+  steps.forEach((step, i) => {
+    const div = document.createElement('div');
+    div.className = 'timeline-step';
+    div.id = 'tstep-' + i;
+    div.innerHTML = `
+      <div class="timeline-dot">${i + 1}</div>
+      <div class="timeline-info">
+        <div class="tl-title">${step.title}</div>
+        <div class="tl-detail">${step.nodeId}</div>
+      </div>`;
+    timelineEl.appendChild(div);
+  });
+}
+
+/* ---- Advance to step ---- */
+function goToStep(stepIndex) {
+  if (!currentScenario) return;
+  if (stepIndex >= currentScenario.steps.length) {
+    stopPlaying();
+    addLog('OK', 'System', 'Simulation complete ✅');
+    return;
+  }
+  currentStep = stepIndex;
+  const step = currentScenario.steps[currentStep];
+  const nodes = currentScenario.nodes;
+
+  /* Update pipeline nodes */
+  nodes.forEach((node, ni) => {
+    const el = document.getElementById('pnode-' + node.id);
+    if (!el) return;
+    /* Find which step index first references this node */
+    const firstStepForNode = currentScenario.steps.findIndex(s => s.nodeId === node.id);
+    const lastStepForNode  = findLastIndex(currentScenario.steps, s => s.nodeId === node.id);
+
+    el.classList.remove('active', 'done', 'error');
+    if (step.nodeId === node.id) {
+      el.classList.add('active');
+    } else if (firstStepForNode !== -1 && firstStepForNode < currentStep) {
+      el.classList.add('done');
+    }
+  });
+
+  /* Update edges */
+  const activeNodeIndex = nodes.findIndex(n => n.id === step.nodeId);
+  for (let e = 0; e < nodes.length - 1; e++) {
+    const edge = document.getElementById('pedge-' + e);
+    if (!edge) continue;
+    edge.classList.remove('active', 'done', 'error');
+    if (e < activeNodeIndex) edge.classList.add('done');
+    else if (e === activeNodeIndex - 1) edge.classList.add('active');
+  }
+
+  /* Handle special case: security redirect for unauthenticated scenario */
+  if (currentScenario.id === 'get-admin-unauth' && step.nodeId === 'security') {
+    const secEl = document.getElementById('pnode-security');
+    if (secEl) { secEl.classList.remove('active'); secEl.classList.add('error'); }
+    /* Mark the edge before security as error too */
+    const secNodeIdx = nodes.findIndex(n => n.id === 'security');
+    if (secNodeIdx > 0) {
+      const prevEdge = document.getElementById('pedge-' + (secNodeIdx - 1));
+      if (prevEdge) { prevEdge.classList.remove('done','active'); prevEdge.classList.add('error'); }
+    }
+  }
+  /* After the redirect step, clear the error state */
+  if (currentScenario.id === 'get-admin-unauth' && currentStep > 1) {
+    const secEl = document.getElementById('pnode-security');
+    if (secEl) { secEl.classList.remove('error'); secEl.classList.add('done'); }
+  }
+
+  /* Update timeline */
+  currentScenario.steps.forEach((s, i) => {
+    const tel = document.getElementById('tstep-' + i);
+    if (!tel) return;
+    tel.classList.remove('active', 'done', 'error');
+    if (i < currentStep) tel.classList.add('done');
+    else if (i === currentStep) tel.classList.add('active');
+  });
+
+  /* Scroll timeline item into view */
+  const activeTL = document.getElementById('tstep-' + currentStep);
+  if (activeTL) activeTL.scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  /* Update detail card */
+  stepTitleEl.textContent = step.title;
+  stepCounterEl.textContent = `${currentStep + 1} / ${currentScenario.steps.length}`;
+  let bodyHTML = `<p>${step.detail}</p>`;
+  if (step.callChain) {
+    bodyHTML += `<div class="call-chain">${step.callChain}</div>`;
+  }
+  stepBodyEl.innerHTML = bodyHTML;
+
+  /* Progress */
+  const pct = ((currentStep + 1) / currentScenario.steps.length) * 100;
+  progressBarEl.style.width = pct + '%';
+
+  /* Log */
+  if (step.log) {
+    const [level, src, msg] = step.log;
+    addLog(level, src, msg);
+  }
+}
+
+function findLastIndex(arr, fn) {
+  for (let i = arr.length - 1; i >= 0; i--) { if (fn(arr[i])) return i; }
+  return -1;
+}
+
+/* ---- Controls ---- */
+function nextStep() {
+  if (!currentScenario) { addLog('WARN','System','Select a scenario first'); return; }
+  goToStep(currentStep + 1);
+}
+
+function resetSimulation() {
+  stopPlaying();
+  if (!currentScenario) return;
+  currentStep = -1;
+  buildPipeline(currentScenario.nodes);
+  buildTimeline(currentScenario.steps);
+  stepTitleEl.textContent = currentScenario.route + ' — Ready';
+  stepCounterEl.textContent = `0 / ${currentScenario.steps.length}`;
+  stepBodyEl.innerHTML = `<p>Press <strong>Play</strong> or <strong>Next Step</strong> to begin.</p>`;
+  progressBarEl.style.width = '0%';
+  addLog('INFO','System','Simulation reset');
+}
+
+function togglePlay() {
+  if (!currentScenario) { addLog('WARN','System','Select a scenario first'); return; }
+  if (isPlaying) {
+    stopPlaying();
+  } else {
+    startPlaying();
+  }
+}
+
+function startPlaying() {
+  if (currentStep >= currentScenario.steps.length - 1) {
+    resetSimulation();
+  }
+  isPlaying = true;
+  btnPlay.innerHTML = '<span class="icon">⏸</span> Pause';
+  btnPlay.classList.add('primary');
+  scheduleNext();
+}
+
+function stopPlaying() {
+  isPlaying = false;
+  clearTimeout(playTimer);
+  btnPlay.innerHTML = '<span class="icon">▶</span> Play';
+  btnPlay.classList.add('primary');
+}
+
+function scheduleNext() {
+  if (!isPlaying) return;
+  playTimer = setTimeout(() => {
+    nextStep();
+    if (currentStep < currentScenario.steps.length) {
+      scheduleNext();
+    } else {
+      stopPlaying();
+    }
+  }, speed * 1000);
+}
+
+/* Speed slider */
+speedSlider.addEventListener('input', () => {
+  const val = parseInt(speedSlider.value);
+  /* Map 1..10 to 2.0s .. 0.2s */
+  speed = 2.0 - (val - 1) * (1.8 / 9);
+  speedValueEl.textContent = (1 / speed).toFixed(1) + '×';
+});
+/* Init */
+speed = 1.0; speedSlider.value = 5; speedValueEl.textContent = '1.0×';
+
+btnPlay.addEventListener('click', togglePlay);
+btnNext.addEventListener('click', nextStep);
+btnReset.addEventListener('click', resetSimulation);
+
+/* ---- Event log ---- */
+function addLog(level, source, message) {
+  const now = new Date();
+  const ts = now.toLocaleTimeString('en-US', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' })
+             + '.' + String(now.getMilliseconds()).padStart(3,'0');
+
+  const levelCls = {
+    'INFO':'log-level-info','OK':'log-level-ok','WARN':'log-level-warn',
+    'ERR':'log-level-err','DEBUG':'log-level-debug'
+  }[level] || 'log-level-info';
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${ts}</span> <span class="${levelCls}">[${level}]</span> <span class="log-msg">${source}: ${message}</span>`;
+  logBodyEl.appendChild(entry);
+  logBodyEl.scrollTop = logBodyEl.scrollHeight;
+}
+
+$('#btnClearLog').addEventListener('click', () => { logBodyEl.innerHTML = ''; });
+
+/* ---- Keyboard shortcuts ---- */
+document.addEventListener('keydown', e => {
+  /* Ignore if user is typing in an input */
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  switch(e.code) {
+    case 'Space':
+      e.preventDefault();
+      togglePlay();
+      break;
+    case 'KeyN':
+      e.preventDefault();
+      nextStep();
+      break;
+    case 'KeyR':
+      e.preventDefault();
+      resetSimulation();
+      break;
+  }
+});
+
+/* ---- Initial log ---- */
+addLog('INFO','System','Simulator initialized — select a scenario to begin');
+addLog('DEBUG','System','Keyboard shortcuts: Space=Play/Pause, N=Next, R=Reset');
+
+/* ---- Auto-select first scenario ---- */
+selectScenario(0);
+</script>
+</body>
+</html>

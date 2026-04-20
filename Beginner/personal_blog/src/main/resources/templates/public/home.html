@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Personal Blog</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>My Personal Blog</h1>
+    </header>
+
+    <main>
+        <p th:if="${#lists.isEmpty(articles)}">No articles yet.</p>
+
+        <ul th:if="${!#lists.isEmpty(articles)}" class="article-list">
+            <li th:each="article : ${articles}" class="article-list-item">
+                <a th:href="@{'/article/' + ${article.slug}}" th:text="${article.title}">Article title</a>
+                <span th:text="${#temporals.format(article.publishedAt, 'yyyy-MM-dd HH:mm')}">2026-04-20 10:00</span>
+            </li>
+        </ul>
+    </main>
+</div>
+</body>
+</html>

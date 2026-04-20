@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${article.title} + ' | My Personal Blog'">Article | My Personal Blog</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1 th:text="${article.title}">Article title</h1>
+        <p th:text="${#temporals.format(article.publishedAt, 'yyyy-MM-dd HH:mm')}">2026-04-20 10:00</p>
+    </header>
+
+    <main>
+        <article>
+            <p th:text="${article.content}">Article content...</p>
+        </article>
+
+        <p>
+            <a th:href="@{/}">← Back to Home</a>
+        </p>
+    </main>
+</div>
+</body>
+</html>
